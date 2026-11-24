@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitPulse - Tracciamento Allenamenti Settimanale</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome per le icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            900: '#064e3b',
+                        },
+                        dark: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Animazioni e stili personalizzati minimali per scrollbar e transizioni fluide */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .card-hover {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Notifica Toast personalizzata (sostituisce alert) -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Modale di conferma / Gestione Esercizi -->
+    <div id="manage-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-fade-in">
+            <div class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-dumbbell text-emerald-400"></i>
+                    <h3 class="font-bold text-lg">Gestisci Lista Esercizi</h3>
+                </div>
+                <button onclick="closeManageModal()" class="text-slate-400 hover:text-white p-1.5 rounded-lg transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6">
+                <!-- Form aggiunta rapido nel modale -->
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Aggiungi Nuovo Esercizio</label>
+                <div class="flex gap-2 mb-6">
+                    <input type="text" id="modal-new-exercise" placeholder="Es. Hip Thrust, Alzate Laterali..." 
+                           class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                    <button onclick="addExerciseFromModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-plus"></i> Aggiungi
+                    </button>
+                </div>
+
+                <!-- Lista esercizi eliminabili -->
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Esercizi nel Menù a Tendina</label>
+                    <span id="exercise-count-badge" class="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="modal-exercise-list" class="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50/50">
+                    <!-- Popolato via JS -->
+                </div>
+            </div>
+
+            <div class="bg-slate-50 px-6 py-3.5 border-t border-slate-200 flex justify-between items-center">
+                <button onclick="resetDefaultExercises()" class="text-xs font-medium text-slate-500 hover:text-slate-800 underline">
+                    Ripristina predefiniti
+                </button>
+                <button onclick="closeManageModal()" class="bg-slate-900 hover:bg-slate-800 text-white font-medium px-5 py-2 rounded-xl text-sm transition-colors">
+                    Chiudi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header / Navbar -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-md">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight flex items-center gap-2">
+                        FitPulse <span class="text-xs font-semibold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">Tracker</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Pianifica i tuoi esercizi e monitora i progressi settimanali</p>
+                </div>
+            </div>
+
+            <!-- Controlli Navigazione Settimana -->
+            <div class="flex items-center justify-between sm:justify-end gap-2 bg-slate-800/90 p-1.5 rounded-xl border border-slate-700">
+                <button onclick="changeWeek(-1)" title="Settimana precedente" class="p-2 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="px-3 text-center min-w-[175px]">
+                    <div id="week-label" class="text-xs font-bold uppercase tracking-wider text-emerald-400">Settimana Corrente</div>
+                    <div id="week-dates" class="text-xs text-slate-300 font-medium">23 Nov - 29 Nov 2026</div>
+                </div>
+                <button onclick="changeWeek(1)" title="Settimana successiva" class="p-2 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+                <button onclick="goToCurrentWeek()" id="btn-today" class="hidden sm:inline-flex items-center gap-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg transition-colors ml-1">
+                    Oggi
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Sezione Superiore: Form Inserimento Esercizio + Riepilogo Progressi Settimanali -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Card 1: Aggiungi Esercizio (7 colonne su desktop) -->
+            <section class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                <i class="fa-solid fa-plus-circle"></i>
+                            </span>
+                            <h2 class="text-lg font-bold text-slate-900">Pianifica Esercizio</h2>
+                        </div>
+                        <button onclick="openManageModal()" class="text-xs font-semibold text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5">
+                            <i class="fa-solid fa-sliders"></i> Gestisci Esercizi nel Menù
+                        </button>
+                    </div>
+
+                    <form id="workout-form" onsubmit="handleAddWorkout(event)" class="space-y-4">
+                        <!-- Riga 1: Menù a tendina Esercizio + Pulsante rapido rimuovi + Aggiunta rapida al menù -->
+                        <div class="space-y-2.5">
+                            <div>
+                                <label for="exercise-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                    Seleziona Esercizio
+                                </label>
+                                <div class="flex items-stretch gap-2.5">
+                                    <div class="relative flex-1 min-w-0">
+                                        <select id="exercise-select" required
+                                                class="w-full h-11 appearance-none bg-slate-50 border border-slate-300 text-slate-900 text-sm font-medium rounded-xl pl-3.5 pr-9 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow truncate">
+                                            <!-- Popolato dinamicamente -->
+                                        </select>
+                                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500">
+                                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Pulsante rapido per rimuovere l'esercizio attualmente selezionato nel dropdown -->
+                                    <button type="button" onclick="removeSelectedExerciseFromDropdown()" title="Rimuovi questo esercizio dal menù a tendina"
+                                            class="h-11 w-11 shrink-0 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors flex items-center justify-center">
+                                        <i class="fa-solid fa-trash-can text-sm"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Barra rapida aggiunta nuovo esercizio al menù a tendina -->
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <input type="text" id="quick-new-exercise" placeholder="Nuovo esercizio (es. Leg Press)..."
+                                       class="flex-1 min-w-0 h-10 bg-white border border-slate-200 rounded-xl px-3.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <button type="button" onclick="quickAddExercise()"
+                                        class="h-10 shrink-0 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-4 rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-plus"></i> Aggiungi al menù
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Riga 2: Griglia responsiva 4 colonne (Giorno, Serie, Ripetizioni, Carico kg) senza sovrapposizioni -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                            <!-- Giorno della settimana -->
+                            <div class="min-w-0">
+                                <label for="day-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                    Giorno
+                                </label>
+                                <div class="relative">
+                                    <select id="day-select" onchange="syncAllDaysCheckbox()"
+                                            class="w-full h-11 appearance-none bg-slate-50 border border-slate-300 text-slate-900 text-sm font-medium rounded-xl pl-3.5 pr-9 focus:outline-none focus:ring-2 focus:ring-emerald-500 truncate">
+                                        <option value="ALL" class="font-bold text-emerald-700">Tutti i giorni (Lun - Dom)</option>
+                                        <option value="0">Lunedì</option>
+                                        <option value="1">Martedì</option>
+                                        <option value="2">Mercoledì</option>
+                                        <option value="3">Giovedì</option>
+                                        <option value="4">Venerdì</option>
+                                        <option value="5">Sabato</option>
+                                        <option value="6">Domenica</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500">
+                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Serie (tendina) -->
+                            <div class="min-w-0">
+                                <label for="sets-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                    Serie
+                                </label>
+                                <div class="relative">
+                                    <select id="sets-select"
+                                            class="w-full h-11 appearance-none bg-slate-50 border border-slate-300 text-slate-900 text-sm font-medium rounded-xl pl-3.5 pr-9 focus:outline-none focus:ring-2 focus:ring-emerald-500 truncate">
+                                        <option value="1">1 Serie</option>
+                                        <option value="2">2 Serie</option>
+                                        <option value="3" selected>3 Serie</option>
+                                        <option value="4">4 Serie</option>
+                                        <option value="5">5 Serie</option>
+                                        <option value="6">6 Serie</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500">
+                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ripetizioni (menù a tendina) -->
+                            <div class="min-w-0">
+                                <label for="reps-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                    Ripetizioni
+                                </label>
+                                <div class="relative">
+                                    <select id="reps-select"
+                                            class="w-full h-11 appearance-none bg-slate-50 border border-slate-300 text-slate-900 text-sm font-medium rounded-xl pl-3.5 pr-9 focus:outline-none focus:ring-2 focus:ring-emerald-500 truncate">
+                                        <option value="1">1 rip (Massimale)</option>
+                                        <option value="3">3 rip (Forza)</option>
+                                        <option value="5">5 rip</option>
+                                        <option value="6">6 rip</option>
+                                        <option value="8">8 rip</option>
+                                        <option value="10" selected>10 rip</option>
+                                        <option value="12">12 rip</option>
+                                        <option value="15">15 rip</option>
+                                        <option value="20">20 rip</option>
+                                        <option value="25">25 rip</option>
+                                        <option value="30">30 rip</option>
+                                        <option value="30 sec">30 sec (Isometria)</option>
+                                        <option value="45 sec">45 sec (Isometria)</option>
+                                        <option value="60 sec">60 sec (Isometria)</option>
+                                        <option value="A cedimento">A cedimento</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500">
+                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Carico opzionale (kg) -->
+                            <div class="min-w-0">
+                                <label for="weight-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                    Carico (kg)
+                                </label>
+                                <input type="number" id="weight-input" min="0" max="500" step="0.5" placeholder="Opz. es. 60"
+                                       class="w-full h-11 bg-slate-50 border border-slate-300 text-slate-900 text-sm font-medium rounded-xl px-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            </div>
+                        </div>
+
+                        <!-- Riga 3: Casella di spunta Tutti i giorni + Pulsante Submit -->
+                        <div class="pt-1 space-y-3">
+                            <label for="all-days-checkbox" class="flex items-center justify-between gap-3 p-3 rounded-xl bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/80 cursor-pointer transition-colors select-none">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <input type="checkbox" id="all-days-checkbox" onchange="toggleAllDaysFromCheckbox(this.checked)"
+                                           class="w-4 h-4 shrink-0 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                                    <span class="text-xs font-semibold text-slate-800 leading-snug">
+                                        Ripeti su tutti i 7 giorni della settimana <span class="text-emerald-700 font-bold">(Lun - Dom)</span>
+                                    </span>
+                                </div>
+                                <span class="shrink-0 text-[11px] font-bold uppercase tracking-wider bg-emerald-600/10 text-emerald-700 px-2 py-0.5 rounded-md">
+                                    7x Giorni
+                                </span>
+                            </label>
+
+                            <button type="submit" class="w-full h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-6 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm">
+                                <i class="fa-solid fa-calendar-plus"></i> <span id="submit-btn-text">Inserisci nella Scheda Settimanale</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Card 2: Riepilogo Progressi Settimanali (5 colonne su desktop) -->
+            <section class="lg:col-span-5 bg-slate-900 text-white rounded-2xl shadow-md p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden">
+                <!-- Decorazione di sfondo -->
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                                <i class="fa-solid fa-chart-line"></i>
+                            </span>
+                            <h2 class="text-lg font-bold">Progressi Settimana</h2>
+                        </div>
+                        <span id="completion-badge" class="text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full">
+                            0% Completato
+                        </span>
+                    </div>
+
+                    <!-- Barra di avanzamento -->
+                    <div class="mb-5">
+                        <div class="flex justify-between text-xs text-slate-400 mb-1.5">
+                            <span>Obiettivo settimanale</span>
+                            <span id="progress-fraction" class="font-semibold text-white">0 / 0 esercizi</span>
+                        </div>
+                        <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                            <div id="progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metriche principali -->
+                    <div class="grid grid-cols-3 gap-3 mb-5">
+                        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-3 text-center">
+                            <div class="text-xs text-slate-400 mb-0.5">Completati</div>
+                            <div id="stat-completed" class="text-xl font-extrabold text-emerald-400">0</div>
+                        </div>
+                        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-3 text-center">
+                            <div class="text-xs text-slate-400 mb-0.5">Serie Svolte</div>
+                            <div id="stat-sets" class="text-xl font-extrabold text-white">0</div>
+                        </div>
+                        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-3 text-center">
+                            <div class="text-xs text-slate-400 mb-0.5">Volume (kg)</div>
+                            <div id="stat-volume" class="text-xl font-extrabold text-teal-300">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mini Grafico a Barre Attività Giornaliera -->
+                <div class="bg-slate-800/50 border border-slate-800 rounded-xl p-3.5">
+                    <div class="flex items-center justify-between text-xs text-slate-400 mb-2.5">
+                        <span>Distribuzione Serie Completate</span>
+                        <span class="text-[11px] text-slate-500">Lun - Dom</span>
+                    </div>
+                    <div id="weekly-chart" class="grid grid-cols-7 gap-2 items-end h-20 pt-2">
+                        <!-- Barre generate via JS -->
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Sezione Vista Settimanale (7 Giorni) -->
+        <section class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                        <i class="fa-regular fa-calendar-check text-emerald-600"></i> Piano Settimanale
+                    </h2>
+                    <p class="text-xs text-slate-500">Spunta gli esercizi man mano che li completi per aggiornare le statistiche</p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="copyPreviousWeek()" class="text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-2 rounded-xl shadow-xs transition-colors flex items-center gap-1.5">
+                        <i class="fa-regular fa-copy text-slate-500"></i> Copia da settimana scorsa
+                    </button>
+                </div>
+            </div>
+
+            <!-- Griglia responsiva dei 7 giorni -->
+            <div id="week-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                <!-- Le 7 card giornaliere vengono renderizzate dinamicamente qui -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-10 py-5">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div>
+                <span class="font-bold text-slate-700">FitPulse Tracker</span> &bull; I tuoi dati sono salvati automaticamente nel browser.
+            </div>
+            <button onclick="resetDemoData()" class="text-slate-400 hover:text-rose-600 transition-colors underline">
+                Ripristina dati di esempio
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        /**
+         * COSTANTI E STATO DELL'APPLICAZIONE
+         */
+        const STORAGE_KEYS = {
+            EXERCISES: 'fitpulse_exercises_v1',
+            WORKOUTS: 'fitpulse_workouts_v1'
+        };
+
+        const DAYS_IT = [
+            'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'
+        ];
+
+        const DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+
+        const DEFAULT_EXERCISES = [
+            'Panca Piana con Bilanciere',
+            'Squat con Bilanciere',
+            'Stacco da Terra',
+            'Trazioni alla Sbarra',
+            'Military Press',
+            'Rematore con Bilanciere',
+            'Dip alle Parallele',
+            'Curl con Bilanciere',
+            'French Press',
+            'Affondi con Manubri',
+            'Leg Press',
+            'Alzate Laterali',
+            'Lat Machine',
+            'Plank Addominale',
+            'Crunch a Terra'
+        ];
+
+        // Stato globale
+        let exercisesList = [];
+        let workoutsByWeek = {}; // Struttura: { "YYYY-MM-DD": [ { id, dayIndex, exercise, sets, reps, weight, completed } ] }
+        let currentMonday = getMonday(new Date());
+
+        /**
+         * INIZIALIZZAZIONE
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            populateExerciseDropdown();
+            setDefaultDayInForm();
+            renderApp();
+        });
+
+        /**
+         * GESTIONE DATE SETTIMANALI (Lunedì come inizio settimana)
+         */
+        function getMonday(date) {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            const day = d.getDay(); // 0 = Dom, 1 = Lun, ...
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(d.setDate(diff));
+        }
+
+        function formatWeekKey(mondayDate) {
+            const y = mondayDate.getFullYear();
+            const m = String(mondayDate.getMonth() + 1).padStart(2, '0');
+            const d = String(mondayDate.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatDateRange(mondayDate) {
+            const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+            const sundayDate = new Date(mondayDate);
+            sundayDate.setDate(mondayDate.getDate() + 6);
+
+            const startStr = `${mondayDate.getDate()} ${months[mondayDate.getMonth()]}`;
+            const endStr = `${sundayDate.getDate()} ${months[sundayDate.getMonth()]} ${sundayDate.getFullYear()}`;
+            return `${startStr} - ${endStr}`;
+        }
+
+        function changeWeek(offset) {
+            currentMonday.setDate(currentMonday.getDate() + (offset * 7));
+            renderApp();
+        }
+
+        function goToCurrentWeek() {
+            currentMonday = getMonday(new Date());
+            renderApp();
+        }
+
+        function setDefaultDayInForm() {
+            const today = new Date().getDay(); // 0 Dom -> 6, 1 Lun -> 0
+            const mappedDay = today === 0 ? 6 : today - 1;
+            document.getElementById('day-select').value = mappedDay.toString();
+            syncAllDaysCheckbox();
+        }
+
+        function toggleAllDaysFromCheckbox(isChecked) {
+            const daySelect = document.getElementById('day-select');
+            const submitText = document.getElementById('submit-btn-text');
+            if (isChecked) {
+                daySelect.value = 'ALL';
+                submitText.textContent = 'Inserisci in Tutti i 7 Giorni';
+            } else {
+                const today = new Date().getDay();
+                const mappedDay = today === 0 ? 6 : today - 1;
+                daySelect.value = mappedDay.toString();
+                submitText.textContent = 'Inserisci nella Scheda Settimanale';
+            }
+        }
+
+        function syncAllDaysCheckbox() {
+            const daySelect = document.getElementById('day-select');
+            const checkbox = document.getElementById('all-days-checkbox');
+            const submitText = document.getElementById('submit-btn-text');
+            const isAll = daySelect.value === 'ALL';
+            checkbox.checked = isAll;
+            submitText.textContent = isAll ? 'Inserisci in Tutti i 7 Giorni' : 'Inserisci nella Scheda Settimanale';
+        }
+
+        /**
+         * CARICAMENTO E SALVATAGGIO LOCALSTORAGE
+         */
+        function loadData() {
+            try {
+                const savedExercises = localStorage.getItem(STORAGE_KEYS.EXERCISES);
+                const savedWorkouts = localStorage.getItem(STORAGE_KEYS.WORKOUTS);
+
+                if (savedExercises) {
+                    exercisesList = JSON.parse(savedExercises);
+                } else {
+                    exercisesList = [...DEFAULT_EXERCISES];
+                    saveExercises();
+                }
+
+                if (savedWorkouts) {
+                    workoutsByWeek = JSON.parse(savedWorkouts);
+                } else {
+                    seedInitialDemoData();
+                }
+            } catch (err) {
+                console.error('Errore lettura localStorage:', err);
+                exercisesList = [...DEFAULT_EXERCISES];
+                workoutsByWeek = {};
+            }
+        }
+
+        function saveExercises() {
+            localStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercisesList));
+        }
+
+        function saveWorkouts() {
+            localStorage.setItem(STORAGE_KEYS.WORKOUTS, JSON.stringify(workoutsByWeek));
+        }
+
+        /**
+         * POPOLAMENTO DATI DI ESEMPIO ALLA PRIMA APERTURA
+         */
+        function seedInitialDemoData() {
+            const thisWeekKey = formatWeekKey(getMonday(new Date()));
+            workoutsByWeek[thisWeekKey] = [
+                { id: 'demo-1', dayIndex: 0, exercise: 'Panca Piana con Bilanciere', sets: 4, reps: '8', weight: 75, completed: true },
+                { id: 'demo-2', dayIndex: 0, exercise: 'Dip alle Parallele', sets: 3, reps: '12', weight: 10, completed: true },
+                { id: 'demo-3', dayIndex: 0, exercise: 'Alzate Laterali', sets: 3, reps: '15', weight: 12, completed: true },
+                { id: 'demo-4', dayIndex: 2, exercise: 'Squat con Bilanciere', sets: 4, reps: '6', weight: 95, completed: true },
+                { id: 'demo-5', dayIndex: 2, exercise: 'Affondi con Manubri', sets: 3, reps: '10', weight: 20, completed: false },
+                { id: 'demo-6', dayIndex: 4, exercise: 'Stacco da Terra', sets: 4, reps: '5', weight: 110, completed: false },
+                { id: 'demo-7', dayIndex: 4, exercise: 'Trazioni alla Sbarra', sets: 4, reps: '8', weight: 0, completed: false },
+                { id: 'demo-8', dayIndex: 4, exercise: 'Plank Addominale', sets: 3, reps: '60 sec', weight: 0, completed: false }
+            ];
+            saveWorkouts();
+        }
+
+        function resetDemoData() {
+            localStorage.removeItem(STORAGE_KEYS.WORKOUTS);
+            workoutsByWeek = {};
+            seedInitialDemoData();
+            currentMonday = getMonday(new Date());
+            renderApp();
+            showToast('Dati di esempio ripristinati con successo!', 'success');
+        }
+
+        /**
+         * GESTIONE MENÙ A TENDINA ESERCIZI (Aggiungi / Rimuovi)
+         */
+        function populateExerciseDropdown(selectedValue = null) {
+            const select = document.getElementById('exercise-select');
+            const currentVal = selectedValue || select.value;
+            select.innerHTML = '';
+
+            if (exercisesList.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '-- Nessun esercizio disponibile (aggiungine uno) --';
+                select.appendChild(opt);
+                return;
+            }
+
+            exercisesList.forEach(ex => {
+                const opt = document.createElement('option');
+                opt.value = ex;
+                opt.textContent = ex;
+                select.appendChild(opt);
+            });
+
+            if (currentVal && exercisesList.includes(currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        function quickAddExercise() {
+            const input = document.getElementById('quick-new-exercise');
+            const name = input.value.trim();
+
+            if (!name) {
+                showToast('Inserisci il nome del nuovo esercizio.', 'error');
+                input.focus();
+                return;
+            }
+
+            if (exercisesList.some(e => e.toLowerCase() === name.toLowerCase())) {
+                showToast('Questo esercizio è già presente nel menù!', 'error');
+                return;
+            }
+
+            exercisesList.unshift(name);
+            saveExercises();
+            populateExerciseDropdown(name);
+            input.value = '';
+            showToast(`"${name}" aggiunto al menù a tendina!`, 'success');
+        }
+
+        function removeSelectedExerciseFromDropdown() {
+            const select = document.getElementById('exercise-select');
+            const selected = select.value;
+
+            if (!selected) return;
+
+            exercisesList = exercisesList.filter(e => e !== selected);
+            saveExercises();
+            populateExerciseDropdown();
+            showToast(`"${selected}" rimosso dal menù.`, 'info');
+        }
+
+        // Funzioni Modale Gestione Completa Esercizi
+        function openManageModal() {
+            renderModalExerciseList();
+            document.getElementById('manage-modal').classList.remove('hidden');
+        }
+
+        function closeManageModal() {
+            document.getElementById('manage-modal').classList.add('hidden');
+        }
+
+        function renderModalExerciseList() {
+            const listEl = document.getElementById('modal-exercise-list');
+            const badge = document.getElementById('exercise-count-badge');
+            badge.textContent = exercisesList.length;
+
+            if (exercisesList.length === 0) {
+                listEl.innerHTML = `<div class="p-6 text-center text-sm text-slate-400">Nessun esercizio in lista. Aggiungine uno qui sopra!</div>`;
+                return;
+            }
+
+            listEl.innerHTML = exercisesList.map((ex, idx) => `
+                <div class="flex items-center justify-between px-4 py-2.5 hover:bg-white transition-colors">
+                    <span class="text-sm font-medium text-slate-700">${escapeHtml(ex)}</span>
+                    <button onclick="deleteExerciseByIndex(${idx})" title="Elimina esercizio"
+                            class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function addExerciseFromModal() {
+            const input = document.getElementById('modal-new-exercise');
+            const name = input.value.trim();
+
+            if (!name) {
+                showToast('Scrivi il nome dell\'esercizio da aggiungere.', 'error');
+                return;
+            }
+
+            if (exercisesList.some(e => e.toLowerCase() === name.toLowerCase())) {
+                showToast('Esercizio già presente nella lista.', 'error');
+                return;
+            }
+
+            exercisesList.unshift(name);
+            saveExercises();
+            populateExerciseDropdown(name);
+            renderModalExerciseList();
+            input.value = '';
+            showToast(`Esercizio "${name}" aggiunto!`, 'success');
+        }
+
+        function deleteExerciseByIndex(index) {
+            const removed = exercisesList[index];
+            exercisesList.splice(index, 1);
+            saveExercises();
+            populateExerciseDropdown();
+            renderModalExerciseList();
+            showToast(`"${removed}" rimosso dalla lista.`, 'info');
+        }
+
+        function resetDefaultExercises() {
+            exercisesList = [...DEFAULT_EXERCISES];
+            saveExercises();
+            populateExerciseDropdown();
+            renderModalExerciseList();
+            showToast('Lista esercizi predefiniti ripristinata.', 'success');
+        }
+
+        /**
+         * AGGIUNTA, COMPLETAMENTO E RIMOZIONE ALLENAMENTI NELLA SETTIMANA
+         */
+        function handleAddWorkout(event) {
+            event.preventDefault();
+
+            const exercise = document.getElementById('exercise-select').value;
+            if (!exercise) {
+                showToast('Seleziona o crea prima un esercizio nel menù.', 'error');
+                return;
+            }
+
+            const dayValue = document.getElementById('day-select').value;
+            const isAllDays = dayValue === 'ALL' || document.getElementById('all-days-checkbox').checked;
+            const sets = parseInt(document.getElementById('sets-select').value, 10);
+            const reps = document.getElementById('reps-select').value;
+            const weightRaw = document.getElementById('weight-input').value;
+            const weight = weightRaw ? parseFloat(weightRaw) : 0;
+
+            const weekKey = formatWeekKey(currentMonday);
+            if (!workoutsByWeek[weekKey]) {
+                workoutsByWeek[weekKey] = [];
+            }
+
+            if (isAllDays) {
+                for (let d = 0; d < 7; d++) {
+                    workoutsByWeek[weekKey].push({
+                        id: 'wk-' + Date.now() + '-' + d + '-' + Math.random().toString(36).substr(2, 5),
+                        dayIndex: d,
+                        exercise,
+                        sets,
+                        reps,
+                        weight,
+                        completed: false
+                    });
+                }
+                saveWorkouts();
+                renderApp();
+                showToast(`"${exercise}" aggiunto a tutti i 7 giorni della settimana!`, 'success');
+            } else {
+                const dayIndex = parseInt(dayValue, 10);
+                const newEntry = {
+                    id: 'wk-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                    dayIndex,
+                    exercise,
+                    sets,
+                    reps,
+                    weight,
+                    completed: false
+                };
+
+                workoutsByWeek[weekKey].push(newEntry);
+                saveWorkouts();
+                renderApp();
+                showToast(`${exercise} aggiunto a ${DAYS_IT[dayIndex]}!`, 'success');
+            }
+        }
+
+        function duplicateWorkoutToAllDays(workoutId) {
+            const weekKey = formatWeekKey(currentMonday);
+            const list = workoutsByWeek[weekKey] || [];
+            const sourceItem = list.find(w => w.id === workoutId);
+
+            if (!sourceItem) return;
+
+            let addedCount = 0;
+            for (let d = 0; d < 7; d++) {
+                if (d === sourceItem.dayIndex) continue;
+
+                // Evita duplicati identici nello stesso giorno
+                const alreadyExists = list.some(w =>
+                    w.dayIndex === d &&
+                    w.exercise === sourceItem.exercise &&
+                    w.sets === sourceItem.sets &&
+                    w.reps === sourceItem.reps &&
+                    w.weight === sourceItem.weight
+                );
+
+                if (!alreadyExists) {
+                    list.push({
+                        id: 'wk-' + Date.now() + '-' + d + '-' + Math.random().toString(36).substr(2, 5),
+                        dayIndex: d,
+                        exercise: sourceItem.exercise,
+                        sets: sourceItem.sets,
+                        reps: sourceItem.reps,
+                        weight: sourceItem.weight,
+                        completed: false
+                    });
+                    addedCount++;
+                }
+            }
+
+            if (addedCount === 0) {
+                showToast(`"${sourceItem.exercise}" è già presente in tutti gli altri giorni!`, 'info');
+                return;
+            }
+
+            saveWorkouts();
+            renderApp();
+            showToast(`"${sourceItem.exercise}" duplicato negli altri ${addedCount} giorni della settimana!`, 'success');
+        }
+
+        function toggleWorkoutCompleted(workoutId) {
+            const weekKey = formatWeekKey(currentMonday);
+            const list = workoutsByWeek[weekKey] || [];
+            const item = list.find(w => w.id === workoutId);
+
+            if (item) {
+                item.completed = !item.completed;
+                saveWorkouts();
+                renderApp();
+            }
+        }
+
+        function deleteWorkoutEntry(workoutId) {
+            const weekKey = formatWeekKey(currentMonday);
+            if (!workoutsByWeek[weekKey]) return;
+
+            workoutsByWeek[weekKey] = workoutsByWeek[weekKey].filter(w => w.id !== workoutId);
+            saveWorkouts();
+            renderApp();
+            showToast('Esercizio rimosso dalla giornata.', 'info');
+        }
+
+        function quickSelectDayAndFocus(dayIndex) {
+            document.getElementById('day-select').value = dayIndex.toString();
+            syncAllDaysCheckbox();
+            const select = document.getElementById('exercise-select');
+            select.focus();
+            select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function copyPreviousWeek() {
+            const prevMonday = new Date(currentMonday);
+            prevMonday.setDate(prevMonday.getDate() - 7);
+            const prevKey = formatWeekKey(prevMonday);
+            const currKey = formatWeekKey(currentMonday);
+
+            const prevWorkouts = workoutsByWeek[prevKey];
+            if (!prevWorkouts || prevWorkouts.length === 0) {
+                showToast('Nessun allenamento trovato nella settimana precedente.', 'error');
+                return;
+            }
+
+            if (!workoutsByWeek[currKey]) {
+                workoutsByWeek[currKey] = [];
+            }
+
+            const cloned = prevWorkouts.map(w => ({
+                ...w,
+                id: 'wk-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                completed: false
+            }));
+
+            workoutsByWeek[currKey].push(...cloned);
+            saveWorkouts();
+            renderApp();
+            showToast(`Copiati ${cloned.length} esercizi dalla settimana scorsa!`, 'success');
+        }
+
+        /**
+         * RENDERING INTERFACCIA SETTIMANALE E STATISTICHE
+         */
+        function renderApp() {
+            updateHeaderDates();
+            renderWeeklyGrid();
+            renderProgressStats();
+        }
+
+        function updateHeaderDates() {
+            const todayMonday = getMonday(new Date());
+            const isCurrentWeek = formatWeekKey(todayMonday) === formatWeekKey(currentMonday);
+
+            const labelEl = document.getElementById('week-label');
+            const datesEl = document.getElementById('week-dates');
+            const todayBtn = document.getElementById('btn-today');
+
+            datesEl.textContent = formatDateRange(currentMonday);
+
+            if (isCurrentWeek) {
+                labelEl.textContent = 'Settimana Corrente';
+                labelEl.className = 'text-xs font-bold uppercase tracking-wider text-emerald-400';
+                todayBtn.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                const diffWeeks = Math.round((currentMonday - todayMonday) / (7 * 24 * 60 * 60 * 1000));
+                if (diffWeeks === -1) labelEl.textContent = 'Settimana Scorsa';
+                else if (diffWeeks === 1) labelEl.textContent = 'Prossima Settimana';
+                else if (diffWeeks < 0) labelEl.textContent = `${Math.abs(diffWeeks)} Settimane Fa`;
+                else labelEl.textContent = `Tra ${diffWeeks} Settimane`;
+
+                labelEl.className = 'text-xs font-bold uppercase tracking-wider text-amber-400';
+                todayBtn.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        }
+
+        function renderWeeklyGrid() {
+            const grid = document.getElementById('week-grid');
+            const weekKey = formatWeekKey(currentMonday);
+            const weekWorkouts = workoutsByWeek[weekKey] || [];
+            const todayStr = new Date().toDateString();
+
+            grid.innerHTML = DAYS_IT.map((dayName, dayIdx) => {
+                const dayDate = new Date(currentMonday);
+                dayDate.setDate(currentMonday.getDate() + dayIdx);
+                const isToday = dayDate.toDateString() === todayStr;
+
+                const dayItems = weekWorkouts.filter(w => w.dayIndex === dayIdx);
+                const completedCount = dayItems.filter(w => w.completed).length;
+                const allDone = dayItems.length > 0 && completedCount === dayItems.length;
+
+                return `
+                    <div class="bg-white rounded-2xl border ${isToday ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200/90'} shadow-xs flex flex-col overflow-hidden card-hover">
+                        <!-- Intestazione Giorno -->
+                        <div class="px-4 py-3 ${isToday ? 'bg-emerald-50/80 border-b border-emerald-200' : 'bg-slate-50 border-b border-slate-100'} flex items-center justify-between">
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-sm ${isToday ? 'text-emerald-900' : 'text-slate-800'}">${dayName}</span>
+                                    ${isToday ? '<span class="text-[10px] font-extrabold uppercase bg-emerald-600 text-white px-1.5 py-0.5 rounded-md">Oggi</span>' : ''}
+                                </div>
+                                <div class="text-[11px] text-slate-400 font-medium">${dayDate.getDate()}/${String(dayDate.getMonth() + 1).padStart(2, '0')}</div>
+                            </div>
+                            
+                            <div class="flex items-center gap-1.5">
+                                ${dayItems.length > 0 ? `
+                                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${allDone ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200/70 text-slate-600'}">
+                                        ${completedCount}/${dayItems.length}
+                                    </span>
+                                ` : ''}
+                                <button onclick="quickSelectDayAndFocus(${dayIdx})" title="Aggiungi esercizio a ${dayName}"
+                                        class="w-7 h-7 rounded-lg bg-white hover:bg-emerald-600 text-slate-500 hover:text-white border border-slate-200 hover:border-emerald-600 flex items-center justify-center transition-colors text-xs">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Lista Esercizi del Giorno -->
+                        <div class="p-3 flex-1 space-y-2.5 min-h-[150px]">
+                            ${dayItems.length === 0 ? `
+                                <div class="h-full flex flex-col items-center justify-center text-center py-6 px-2 text-slate-400">
+                                    <i class="fa-solid fa-mug-hot text-slate-300 text-lg mb-1.5"></i>
+                                    <span class="text-xs font-medium">Riposo o nessun esercizio</span>
+                                </div>
+                            ` : dayItems.map(item => `
+                                <div class="rounded-xl p-2.5 border transition-all ${item.completed ? 'bg-emerald-50/50 border-emerald-200/80' : 'bg-slate-50/70 hover:bg-white border-slate-200/80 hover:shadow-xs'}">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <!-- Checkbox completamento + Titolo esercizio -->
+                                        <div class="flex items-start gap-2 min-w-0 flex-1">
+                                            <button type="button" onclick="toggleWorkoutCompleted('${item.id}')"
+                                                    title="${item.completed ? 'Segna come da fare' : 'Segna come completato'}"
+                                                    class="mt-0.5 w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${item.completed ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300 hover:border-emerald-500 text-transparent'}">
+                                                <i class="fa-solid fa-check text-[10px]"></i>
+                                            </button>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="text-xs font-bold leading-snug break-words ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}">
+                                                    ${escapeHtml(item.exercise)}
+                                                </div>
+                                                <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                    <span class="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md ${item.completed ? 'bg-emerald-100/70 text-emerald-700' : 'bg-slate-200/70 text-slate-700'}">
+                                                        ${item.sets} &times; ${escapeHtml(String(item.reps))}
+                                                    </span>
+                                                    ${item.weight > 0 ? `
+                                                        <span class="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md ${item.completed ? 'bg-teal-100/60 text-teal-700' : 'bg-amber-100/80 text-amber-800'}">
+                                                            ${item.weight} kg
+                                                        </span>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Azioni rapide esercizio: Duplica su tutta la settimana + Elimina (in contenitore flex dedicato) -->
+                                        <div class="flex items-center gap-0.5 shrink-0">
+                                            <button type="button" onclick="duplicateWorkoutToAllDays('${item.id}')" title="Ripeti questo esercizio su tutti i 7 giorni della settimana"
+                                                    class="text-slate-400 hover:text-emerald-600 p-1 rounded-md hover:bg-emerald-50 transition-colors">
+                                                <i class="fa-solid fa-calendar-week text-[11px]"></i>
+                                            </button>
+                                            <button type="button" onclick="deleteWorkoutEntry('${item.id}')" title="Rimuovi"
+                                                    class="text-slate-300 hover:text-rose-500 p-1 rounded-md hover:bg-rose-50 transition-colors">
+                                                <i class="fa-solid fa-xmark text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderProgressStats() {
+            const weekKey = formatWeekKey(currentMonday);
+            const weekWorkouts = workoutsByWeek[weekKey] || [];
+
+            const total = weekWorkouts.length;
+            const completedItems = weekWorkouts.filter(w => w.completed);
+            const completedCount = completedItems.length;
+            const percentage = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+
+            // Calcolo serie totali completate e volume (serie * ripetizioni numeriche * carico kg)
+            let totalSetsCompleted = 0;
+            let totalVolumeKg = 0;
+
+            completedItems.forEach(item => {
+                totalSetsCompleted += item.sets;
+                const numericReps = parseInt(item.reps, 10);
+                if (!isNaN(numericReps) && item.weight > 0) {
+                    totalVolumeKg += item.sets * numericReps * item.weight;
+                }
+            });
+
+            // Aggiornamento DOM statistiche
+            document.getElementById('completion-badge').textContent = `${percentage}% Completato`;
+            document.getElementById('progress-fraction').textContent = `${completedCount} / ${total} esercizi`;
+            document.getElementById('progress-bar').style.width = `${percentage}%`;
+
+            document.getElementById('stat-completed').textContent = completedCount;
+            document.getElementById('stat-sets').textContent = totalSetsCompleted;
+            document.getElementById('stat-volume').textContent = totalVolumeKg >= 1000 
+                ? (totalVolumeKg / 1000).toFixed(1) + 't' 
+                : Math.round(totalVolumeKg);
+
+            // Render grafico a barre giornaliero (serie completate per giorno)
+            const dailySets = DAYS_SHORT.map((_, idx) => {
+                return completedItems
+                    .filter(w => w.dayIndex === idx)
+                    .reduce((acc, w) => acc + w.sets, 0);
+            });
+
+            const maxSets = Math.max(...dailySets, 4); // Scala minima 4 serie per estetica
+            const chartEl = document.getElementById('weekly-chart');
+
+            chartEl.innerHTML = dailySets.map((setsVal, idx) => {
+                const heightPct = Math.round((setsVal / maxSets) * 100);
+                return `
+                    <div class="flex flex-col items-center h-full justify-end gap-1">
+                        <div class="w-full flex-1 flex items-end justify-center bg-slate-900/60 rounded-md p-0.5 overflow-hidden">
+                            <div class="w-full rounded-sm transition-all duration-500 ${setsVal > 0 ? 'bg-gradient-to-t from-emerald-500 to-teal-300' : 'bg-slate-700/40'}"
+                                 style="height: ${Math.max(heightPct, 8)}%"
+                                 title="${DAYS_IT[idx]}: ${setsVal} serie completate">
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-semibold ${setsVal > 0 ? 'text-emerald-400' : 'text-slate-500'}">${DAYS_SHORT[idx]}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * UTILITÀ UI: TOAST NOTIFICATIONS & ESCAPE HTML
+         */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const styles = {
+                success: 'bg-emerald-600 text-white border-emerald-500',
+                error: 'bg-rose-600 text-white border-rose-500',
+                info: 'bg-slate-800 text-white border-slate-700'
+            };
+
+            const icons = {
+                success: 'fa-circle-check',
+                error: 'fa-circle-exclamation',
+                info: 'fa-circle-info'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold transform transition-all duration-300 translate-y-2 opacity-0 ${styles[type] || styles.info}`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm"></i><span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
